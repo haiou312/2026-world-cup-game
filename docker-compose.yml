@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: wc_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wc}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_pg}
+      POSTGRES_DB: ${POSTGRES_DB:-worldcup}
+    ports:
+      - "6573:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wc} -d ${POSTGRES_DB:-worldcup}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # backend & web are added in M1 / M4 (their Dockerfiles do not exist yet).
+  # For now run only Postgres:  docker compose up db
+  backend:
+    build:
+      context: ./backend
+    container_name: wc_backend
+    restart: always
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-wc}:${POSTGRES_PASSWORD:-change_me_pg}@db:5432/${POSTGRES_DB:-worldcup}?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8080"
+    profiles:
+      - full
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: wc_web
+    restart: always
+    ports:
+      - "8745:80"
+    depends_on:
+      - backend
+    profiles:
+      - full
+
+volumes:
+  db_data:
